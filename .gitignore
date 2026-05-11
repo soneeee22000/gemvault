@@ -1,0 +1,83 @@
+# Secrets & local config
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+*.private
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Node / TypeScript / Next.js
+node_modules/
+.next/
+.turbo/
+out/
+.pnpm-store/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Hardhat / Foundry / Web3 build artifacts
+artifacts/
+cache/
+typechain-types/
+out/
+broadcast/
+forge-cache/
+deployments/local/
+
+# IDE / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs & local data
+*.log
+data/raw/
+data/cache/
+backtest-runs/
+agent-runs/
+
+# AI tool artifacts (keep repo clean of agent traces)
+.claude/
+.sixth/
+.cursor/
+.aider*
+*.cursorrules-local
+ai-generated/
+
+# Confidential — never commit (defense in depth)
+_PRIVATE_*
+*_PRIVATE.md
+*_CONFIDENTIAL*
+Gems.pdf
+docs/_PRIVATE_*
+docs/PARTNER_NOTES*
+docs/STRATEGY_PRIVATE*
+*.deck.pdf
+*.confidential.*

@@ -1,0 +1,496 @@
+openapi: 3.1.0
+info:
+  title: GemVault Backend API
+  version: 0.1.0
+  description: |
+    Reference RWA fintech backend. Owns the financial-grade ledger, escrow lifecycle,
+    and the on-chain certificate minting orchestration. All write endpoints are
+    idempotent via the `Idempotency-Key` header. Error responses follow RFC 7807.
+  contact:
+    name: Pyae Sone Kyaw
+    url: https://pseonkyaw.dev
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local dev
+  - url: https://gemvault-backend.up.railway.app/api/v1
+    description: Live demo (Railway)
+
+tags:
+  - name: auth
+    description: Authentication and session
+  - name: users
+    description: User management and KYC
+  - name: assets
+    description: Physical asset registry
+  - name: escrows
+    description: Escrow lifecycle
+  - name: certificates
+    description: On-chain certificate state
+  - name: vault
+    description: Vault operator webhook (HMAC-authenticated)
+  - name: audit
+    description: Audit trail export
+
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Issue a JWT for an email/password pair
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: JWT issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthToken"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /users:
+    post:
+      tags: [users]
+      summary: Register a new user
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserRegistration"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{user_id}:
+    get:
+      tags: [users]
+      summary: Fetch a user (admin or owner only)
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /users/{user_id}/kyc:
+    post:
+      tags: [users]
+      summary: (Admin) Approve or reject KYC
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision:
+                  type: string
+                  enum: [APPROVED, REJECTED]
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: KYC updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /assets:
+    post:
+      tags: [assets]
+      summary: Register a physical asset (admin only)
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssetRegistration"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Asset"
+
+  /escrows:
+    post:
+      tags: [escrows]
+      summary: Open a new escrow between buyer and seller
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EscrowOpen"
+      responses:
+        "201":
+          description: Escrow opened (state = PENDING)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Escrow"
+
+  /escrows/{escrow_id}:
+    get:
+      tags: [escrows]
+      summary: Fetch escrow state + event timeline
+      parameters:
+        - $ref: "#/components/parameters/EscrowId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EscrowDetail"
+
+  /escrows/{escrow_id}/lock-funds:
+    post:
+      tags: [escrows]
+      summary: Buyer commits USDC; escrow moves PENDING → FUNDS_LOCKED
+      parameters:
+        - $ref: "#/components/parameters/EscrowId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Funds locked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Escrow"
+
+  /escrows/{escrow_id}/release:
+    post:
+      tags: [escrows]
+      summary: Release escrow after mint; state → RELEASED, seller paid
+      parameters:
+        - $ref: "#/components/parameters/EscrowId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Released
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Escrow"
+
+  /escrows/{escrow_id}/cancel:
+    post:
+      tags: [escrows]
+      summary: Cancel or refund an escrow (depending on current state)
+      parameters:
+        - $ref: "#/components/parameters/EscrowId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+      responses:
+        "200":
+          description: Cancelled or refunded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Escrow"
+
+  /vault/attest:
+    post:
+      tags: [vault]
+      summary: Vault operator attestation webhook (HMAC-authenticated)
+      security:
+        - vaultHmac: []
+      parameters:
+        - in: header
+          name: X-GemVault-Operator-Id
+          required: true
+          schema: { type: string }
+        - in: header
+          name: X-GemVault-Nonce
+          required: true
+          schema: { type: string }
+        - in: header
+          name: X-GemVault-Signature
+          required: true
+          schema: { type: string, description: "HMAC-SHA256 of body, base64" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VaultAttestation"
+      responses:
+        "202":
+          description: Attestation accepted, on-chain mint queued
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Replay detected (nonce already seen)
+
+  /certificates/{certificate_id}:
+    get:
+      tags: [certificates]
+      summary: Fetch certificate state including on-chain status
+      parameters:
+        - in: path
+          name: certificate_id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Certificate"
+
+  /audit/export:
+    get:
+      tags: [audit]
+      summary: Signed CSV export of all events for a time window
+      parameters:
+        - in: query
+          name: from
+          required: true
+          schema: { type: string, format: date-time }
+        - in: query
+          name: to
+          required: true
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: CSV with HMAC-signed footer
+          content:
+            text/csv:
+              schema: { type: string }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    vaultHmac:
+      type: apiKey
+      in: header
+      name: X-GemVault-Signature
+
+  parameters:
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: false
+      schema: { type: string, maxLength: 64 }
+    UserId:
+      in: path
+      name: user_id
+      required: true
+      schema: { type: string, format: uuid }
+    EscrowId:
+      in: path
+      name: escrow_id
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    Unauthorized:
+      description: Invalid or missing credentials
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+
+  schemas:
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password, minLength: 8 }
+
+    AuthToken:
+      type: object
+      required: [access_token, token_type, expires_in]
+      properties:
+        access_token: { type: string }
+        token_type: { type: string, enum: [bearer] }
+        expires_in: { type: integer, description: seconds }
+
+    UserRegistration:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password, minLength: 8 }
+        wallet_address: { type: string, description: "Optional EVM address" }
+
+    User:
+      type: object
+      properties:
+        user_id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        kyc_status: { type: string, enum: [PENDING, APPROVED, REJECTED] }
+        wallet_address: { type: string, nullable: true }
+        available_balance:
+          { type: string, description: "USDC, 6dp Decimal as string" }
+        locked_balance: { type: string }
+        created_at: { type: string, format: date-time }
+
+    AssetRegistration:
+      type: object
+      required: [asset_type, lab_cert_number, vault_location, owner_user_id]
+      properties:
+        asset_type: { type: string, example: "sapphire" }
+        grade: { type: string }
+        weight_carats: { type: string, description: "Decimal as string" }
+        lab_cert_number: { type: string }
+        photo_ipfs_hash: { type: string }
+        vault_location: { type: string, example: "ZUR-VAULT-A" }
+        owner_user_id: { type: string, format: uuid }
+
+    Asset:
+      type: object
+      properties:
+        asset_id: { type: string, format: uuid }
+        asset_type: { type: string }
+        grade: { type: string }
+        weight_carats: { type: string }
+        lab_cert_number: { type: string }
+        photo_ipfs_hash: { type: string }
+        vault_location: { type: string }
+        owner_user_id: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+
+    EscrowOpen:
+      type: object
+      required: [buyer_id, seller_id, asset_id, amount_usdc]
+      properties:
+        buyer_id: { type: string, format: uuid }
+        seller_id: { type: string, format: uuid }
+        asset_id: { type: string, format: uuid }
+        amount_usdc: { type: string, description: "Decimal as string" }
+
+    Escrow:
+      type: object
+      properties:
+        escrow_id: { type: string, format: uuid }
+        buyer_id: { type: string, format: uuid }
+        seller_id: { type: string, format: uuid }
+        asset_id: { type: string, format: uuid }
+        amount_usdc: { type: string }
+        state:
+          type: string
+          enum:
+            [
+              PENDING,
+              FUNDS_LOCKED,
+              VAULT_ATTESTED,
+              CERTIFICATE_MINTED,
+              RELEASED,
+              CANCELLED,
+              REFUNDED,
+            ]
+        opened_at: { type: string, format: date-time }
+        locked_at: { type: string, format: date-time, nullable: true }
+        attested_at: { type: string, format: date-time, nullable: true }
+        minted_at: { type: string, format: date-time, nullable: true }
+        released_at: { type: string, format: date-time, nullable: true }
+
+    EscrowDetail:
+      allOf:
+        - $ref: "#/components/schemas/Escrow"
+        - type: object
+          properties:
+            events:
+              type: array
+              items: { $ref: "#/components/schemas/DomainEvent" }
+            certificate:
+              $ref: "#/components/schemas/Certificate"
+
+    Certificate:
+      type: object
+      properties:
+        certificate_id: { type: string, format: uuid }
+        asset_id: { type: string, format: uuid }
+        owner_user_id: { type: string, format: uuid }
+        token_id: { type: string, description: "uint256 as string" }
+        contract_address: { type: string }
+        tx_hash: { type: string }
+        ipfs_metadata_hash: { type: string }
+        minted_at: { type: string, format: date-time }
+        basescan_url: { type: string, format: uri }
+        ipfs_gateway_url: { type: string, format: uri }
+
+    VaultAttestation:
+      type: object
+      required: [escrow_id, vault_ref, attested_at, attestation_result]
+      properties:
+        escrow_id: { type: string, format: uuid }
+        vault_ref: { type: string, example: "ZUR-2026-05-11-A47C" }
+        attested_at: { type: string, format: date-time }
+        attestation_result: { type: string, enum: [CONFIRMED, REJECTED] }
+        notes: { type: string }
+
+    DomainEvent:
+      type: object
+      properties:
+        event_id: { type: string, format: uuid }
+        stream_id: { type: string, format: uuid }
+        stream_type: { type: string }
+        version: { type: integer }
+        event_type: { type: string }
+        payload: { type: object, additionalProperties: true }
+        correlation_id: { type: string, format: uuid }
+        ts: { type: string, format: date-time }
+
+    Problem:
+      type: object
+      description: RFC 7807 problem details
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
