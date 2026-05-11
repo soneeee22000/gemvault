@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 export default function Home() {
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-6 px-6 py-16">
@@ -49,12 +47,12 @@ type DashboardLinkProps = {
 
 function DashboardLink({ href, title, description }: DashboardLinkProps) {
   return (
-    <Link
+    <a
       href={href}
       className="rounded-lg border border-border bg-muted px-4 py-3 transition-colors hover:bg-primary hover:text-primary-foreground"
     >
       <p className="text-base font-medium">{title}</p>
       <p className="mt-1 text-sm opacity-80">{description}</p>
-    </Link>
+    </a>
   );
 }
