@@ -5,9 +5,9 @@ from collections.abc import AsyncIterator, Iterator
 import pytest
 import pytest_asyncio
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
-from gemvault.adapters.persistence import Base, get_engine, get_sessionmaker
+from gemvault.adapters.persistence import Base, get_sessionmaker
 
 try:
     from testcontainers.postgres import PostgresContainer
@@ -39,16 +39,34 @@ def database_url(postgres_container: object) -> str:
     )
 
 
-@pytest_asyncio.fixture(scope="session")
-async def engine(database_url: str) -> AsyncIterator[AsyncEngine]:
-    eng = get_engine(database_url)
-    async with eng.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+@pytest.fixture(scope="session")
+def schema_ready(database_url: str) -> bool:
+    """Create the schema once per session via a sync psycopg connection.
+
+    Doing this once-per-session via a *non-async* path avoids the pytest-asyncio
+    cross-loop pain entirely. The async engine each test builds afterwards just
+    connects to a DB that already has its schema.
+    """
+    import asyncio
+
+    async def _create() -> None:
+        engine = create_async_engine(database_url)
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+        finally:
+            await engine.dispose()
+
+    asyncio.run(_create())
+    return True
+
+
+@pytest_asyncio.fixture
+async def engine(database_url: str, schema_ready: bool) -> AsyncIterator[AsyncEngine]:  # noqa: ARG001
+    eng = create_async_engine(database_url)
     try:
         yield eng
     finally:
-        async with eng.begin() as conn:
-            await conn.run_sync(Base.metadata.drop_all)
         await eng.dispose()
 
 
