@@ -54,7 +54,9 @@ Verify it's listening:
 docker compose ps
 ```
 
-You should see `gemvault-postgres ... running ... healthy ... 0.0.0.0:5432->5432/tcp`.
+You should see `gemvault-postgres ... running ... healthy ... 0.0.0.0:5433->5432/tcp`.
+
+> **Why 5433 and not 5432?** If you already have a native PostgreSQL service on your machine (Windows often does), it owns `localhost:5432` and Docker's `127.0.0.1` connections won't reach our container. We bind Docker to `5433` to side-step the collision. If you don't have a native Postgres you can change `docker-compose.yml` back to `"5432:5432"` and `backend/.env`'s `DATABASE_URL` port accordingly.
 
 ---
 
@@ -115,7 +117,10 @@ In a **new** PowerShell terminal:
 ```powershell
 cd C:\Web3-BlockChain
 .\backend\.venv\Scripts\activate
-$env:DATABASE_URL_SYNC = "postgresql://gemvault:gemvault@localhost:5432/gemvault"
+# One-time: install the sync Postgres driver the seed uses to bump admin KYC.
+pip install "psycopg[binary]"
+
+$env:DATABASE_URL_SYNC = "postgresql://gemvault:gemvault@localhost:5433/gemvault"
 $env:VAULT_HMAC_SECRET = "sr0_7ZAPtQ2RqrjD88oZYwY4FFw2hZON21bCk_ai5FE"
 $env:VAULT_OPERATOR_ID = "vault-local-01"
 python scripts\demo\seed.py

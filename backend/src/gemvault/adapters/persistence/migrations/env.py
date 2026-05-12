@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 from logging.config import fileConfig
+from pathlib import Path
 
 from alembic import context
 from sqlalchemy import pool
@@ -10,6 +11,24 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from gemvault.adapters.persistence.models import Base
+
+
+def _load_dotenv() -> None:
+    """Minimal .env loader so `alembic` picks up DATABASE_URL when run outside the app."""
+    candidates = [Path.cwd() / ".env", Path(__file__).resolve().parents[5] / ".env"]
+    for path in candidates:
+        if not path.exists():
+            continue
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            os.environ.setdefault(key.strip(), value.strip())
+        return
+
+
+_load_dotenv()
 
 config = context.config
 

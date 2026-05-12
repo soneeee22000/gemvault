@@ -27,6 +27,10 @@ import httpx
 import psycopg
 from psycopg.rows import dict_row
 
+# Windows consoles default to cp1252, which can't render the arrows used below.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 API_BASE = os.environ.get("GEMVAULT_API_BASE", "http://localhost:8000")
 ADMIN_EMAIL = os.environ.get("GEMVAULT_ADMIN_EMAIL", "admin@example.com")
 ADMIN_PASSWORD = os.environ.get("GEMVAULT_ADMIN_PASSWORD", "adminpass1234")
