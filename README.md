@@ -16,7 +16,15 @@ GemVault tokenises physical high-value collectibles (gemstones as the worked exa
 
 The wedge for engineers applying to RWA fintech roles: telecom event-pipeline experience (CDR / SMPP, Kafka) and healthcare compliance work port directly into financial event-sourcing and regulated audit trails — a combination rare on the typical Web3 application stack.
 
-<!-- TODO: Add demo GIF — record via scripts/demo/record.spec.ts after Sprint 6 deploy -->
+## Live Demo
+
+| Surface                                 | URL                                                                                                                |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Dashboard**                           | <https://gemvault-delta.vercel.app>                                                                                |
+| **API + OpenAPI docs**                  | <https://gemvault-api-production.up.railway.app/docs>                                                              |
+| **Certificate contract** — Base Sepolia | [`0x56E9…0508`](https://sepolia.basescan.org/address/0x56E9E95795b258ebFe410E687847853e5E6A0508) (verified source) |
+
+Sign in with `admin@example.com` / `adminpass1234`. The dashboard is pre-seeded with a full escrow lifecycle — Opened → Funds locked → Vault attested → Certificate minted → Released — visible across the Ledger, Escrows, and Certificates views.
 
 ## Architecture
 
