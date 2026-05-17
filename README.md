@@ -79,6 +79,7 @@ State transitions are projected from the event stream; the on-chain certificate 
 - ERC-721 certificate of authenticity on Base Sepolia, OpenZeppelin v5 base, Pausable + role-based access control
 - `_update` override blocks transfers until vault attestation lands — physical custody handoff anchored on-chain
 - Foundry test suite (unit + invariant), verified deploys via manual-dispatch GitHub Action
+- `BaseChainClient` (web3.py) signs and broadcasts real `mint` transactions; key-gated, with a `StubChainClient` fallback so CI stays hermetic (ADR-005)
 
 **HTTP surface**
 
@@ -172,7 +173,7 @@ assay/
 │   │   └── adapters/
 │   │       ├── api/                    FastAPI router + RFC 7807 errors + JWT deps
 │   │       ├── auth/                   scrypt + python-jose JWT provider
-│   │       ├── chain/                  Stub chain client (real Base client = Sprint 6)
+│   │       ├── chain/                  Base chain client (web3.py) + stub fallback
 │   │       ├── persistence/            SQLAlchemy models · event store · repositories · Alembic
 │   │       └── webhook/                HMAC verifier + nonce cache
 │   └── tests/                          Domain unit + adapters integration (testcontainers)
@@ -217,7 +218,7 @@ Cost estimate for a 24/7 demo deploy: **~$5/month** (Railway Hobby covers backen
 
 - [`docs/PRD-ASSAY.md`](./docs/PRD-ASSAY.md) — Product spec + sprint plan + risks
 - [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — System context · hexagonal · state machine · schema
-- [`docs/adr/decisions.md`](./docs/adr/decisions.md) — ADR-001 ERC-721 · ADR-002 vault attestation · ADR-003 single events table · ADR-004 stub JWT
+- [`docs/adr/decisions.md`](./docs/adr/decisions.md) — ADR-001 ERC-721 · ADR-002 vault attestation · ADR-003 single events table · ADR-004 stub JWT · ADR-005 real Base chain client
 - [`docs/openapi.yaml`](./docs/openapi.yaml) — Full API surface
 - [`docs/DEPLOY.md`](./docs/DEPLOY.md) — Deploy guide
 - [`docs/PIVOT-NOTE.md`](./docs/PIVOT-NOTE.md) — Earlier direction retired in favour of RWA fintech; archives in [`docs/archive/`](./docs/archive)

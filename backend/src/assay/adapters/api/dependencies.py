@@ -9,7 +9,7 @@ from fastapi import Depends, Header, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from assay.adapters.auth import JwtError, JwtProvider
-from assay.adapters.chain import ChainClient, StubChainClient
+from assay.adapters.chain import BaseChainClient, ChainClient, StubChainClient
 from assay.adapters.persistence import Database
 from assay.adapters.webhook import HmacVerifier
 from assay.config import Settings
@@ -38,9 +38,27 @@ def _hmac() -> HmacVerifier:
     return HmacVerifier(settings().vault_secrets())
 
 
+# `.env.example` ships this placeholder; treat it as "no key configured".
+_PLACEHOLDER_ADMIN_KEY = "0x" + "0" * 63 + "1"
+
+
 @lru_cache(maxsize=1)
 def _chain() -> ChainClient:
-    return StubChainClient(contract_address=settings().certificate_contract_address)
+    """Real Base client when an admin key is configured, else the stub.
+
+    CI and local dev set no `ADMIN_PRIVATE_KEY`, so they get `StubChainClient`;
+    the live deploy gets `BaseChainClient` once the key is set. See ADR-005.
+    """
+    s = settings()
+    key = s.admin_private_key.strip()
+    if key and key.lower() not in (_PLACEHOLDER_ADMIN_KEY, _PLACEHOLDER_ADMIN_KEY[2:]):
+        return BaseChainClient(
+            rpc_url=s.base_rpc_url,
+            private_key=key,
+            contract_address=s.certificate_contract_address,
+            chain_id=s.base_chain_id,
+        )
+    return StubChainClient(contract_address=s.certificate_contract_address)
 
 
 async def db_session() -> AsyncIterator[AsyncSession]:
