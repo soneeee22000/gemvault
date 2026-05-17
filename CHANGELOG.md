@@ -13,6 +13,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Added
 
+- `BaseChainClient` — a real `web3.py` implementation of the `ChainClient` port that signs and broadcasts `mint` / `attestVault` transactions to Base Sepolia and waits for the receipt. Selection is key-gated in `dependencies._chain()`: with an `ADMIN_PRIVATE_KEY` configured the backend uses the real client, otherwise it falls back to `StubChainClient`, so CI and local dev stay hermetic. On-chain token ids are derived deterministically from the escrow id. New `scripts/verify_chain.py` does a one-off real mint to verify the client end-to-end. See ADR-005.
 - `.github/workflows/verify-contract.yml` — manual-dispatch contract source verification, so an already-deployed address can be verified without a redeploy.
 - Env-driven CORS — a `CORS_ORIGINS` variable lets the live frontend origin be set at deploy time instead of being hardcoded in `main.py`.
 - `frontend/e2e/record.spec.ts` + `frontend/playwright.config.ts` — Playwright walk-through that records the demo GIF against the live deploy.

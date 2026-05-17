@@ -92,6 +92,29 @@ Format: each ADR captures one architectural decision with context, the alternati
 
 ---
 
+## ADR-005 — Real Base chain client behind the existing port, key-gated
+
+**Status:** Accepted · 2026-05-17
+**Context:** The `ChainClient` port has shipped from the start with one implementation, `StubChainClient`, which fabricates deterministic-looking token ids and transaction hashes. The `AssayCertificate` contract has been live and source-verified on Base Sepolia since the reposition. The stub means the backend never actually calls the contract — the on-chain layer is real, but the orchestration around it is not. For a fintech-meets-RWA portfolio piece, an API that genuinely signs and broadcasts mint transactions is a materially stronger demonstration than one that mocks them.
+
+**Decision:** Add `BaseChainClient` — a real implementation of the `ChainClient` port using `web3.py` (`AsyncWeb3`). It signs `mint` / `attestVault` transactions with the platform admin key, broadcasts to Base Sepolia, and waits for the receipt. Selection is **key-gated** in `dependencies._chain()`: when a real `ADMIN_PRIVATE_KEY` is configured the backend uses `BaseChainClient`, otherwise it falls back to `StubChainClient`. CI and local dev set no key, so they keep the stub — no secret, no RPC, no flakiness. On-chain token ids are derived deterministically from the escrow id (`keccak`-truncated to uint64) so a replayed mint collides on-chain rather than issuing a duplicate certificate.
+
+**Alternatives considered:**
+
+- **Keep the stub only.** Rejected — the contract is live; not calling it leaves the most distinctive part of the architecture unexercised.
+- **Replace the stub outright.** Rejected — CI would then need a funded key and a live RPC on every run, adding cost, a secret, and a flake source. The port already exists precisely so both can coexist.
+- **An explicit `CHAIN_MODE` setting.** Rejected as redundant — the presence of a real admin key is itself the unambiguous signal, and inferring from it means one fewer env var to keep consistent.
+
+**Consequences:**
+
+- The live deployment mints real ERC-721 certificates on Base Sepolia; the dashboard's Basescan links resolve to genuine transactions.
+- CI stays hermetic — no key, no network, the stub answers. The blocking unit suite is unchanged.
+- Activating the real client on the live backend is a deliberate, separate step: set `ADMIN_PRIVATE_KEY` on Railway. Merging the change alone does not alter live behaviour until the key is present.
+- `scripts/verify_chain.py` performs a one-off real mint to confirm the client end-to-end before the key is trusted in production.
+- The admin key is a single point of authority for `MINTER_ROLE` / `ATTESTER_ROLE`. Acceptable for a testnet portfolio deploy; production would split these roles across operational accounts or a multisig (already noted in `contracts/README.md`).
+
+---
+
 ## Decisions deferred to implementation time
 
 - **Foundry vs Hardhat for contracts.** Defaulting to Foundry because forge-std + fuzzing + invariants are best-in-class. If we hit a specific incompatibility with Coinbase tooling, revisit.
