@@ -1,0 +1,58 @@
+name: Verify Contract
+
+on:
+  workflow_dispatch:
+    inputs:
+      address:
+        description: Deployed GemVaultCertificate address
+        type: string
+        required: true
+      admin:
+        description: Constructor admin address (the deployer EOA)
+        type: string
+        required: true
+      network:
+        description: Network the contract is deployed on
+        type: choice
+        default: base_sepolia
+        options:
+          - base_sepolia
+
+concurrency:
+  group: verify-contract-${{ inputs.address }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify ${{ inputs.address }} on ${{ inputs.network }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install dependencies
+        run: |
+          forge install OpenZeppelin/openzeppelin-contracts
+          forge install foundry-rs/forge-std
+
+      - name: Build
+        run: forge build
+
+      - name: Verify on Etherscan V2
+        env:
+          BASESCAN_API_KEY: ${{ secrets.BASESCAN_API_KEY }}
+        run: |
+          set -euo pipefail
+          forge verify-contract \
+            "${{ inputs.address }}" \
+            src/GemVaultCertificate.sol:GemVaultCertificate \
+            --chain 84532 \
+            --constructor-args "$(cast abi-encode 'constructor(address)' '${{ inputs.admin }}')" \
+            --watch
